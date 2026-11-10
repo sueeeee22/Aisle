@@ -1,0 +1,607 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#f2f4f9" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#090f1e" media="(prefers-color-scheme: dark)">
+<title>Aisle Congress Tracker</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800&family=Public+Sans:wght@400;500;600;700&display=swap">
+<style>html{color-scheme:light}:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<style>
+/* Layout: one screen. Sticky search + filter chips on top, a single feed below, bill detail in a bottom sheet. */
+:root{
+  --paper:#f2f4f9; --card:#ffffff; --ink:#0f1b33; --mute:#5b6781; --line:#dde3ee; --sunk:#e8ecf4;
+  --blue:#1d4ed8; --blue-soft:#e2eaff; --red:#d1263a; --red-soft:#ffe3e6;
+  --ind:#5f6478; --ind-soft:#e6e8ef; --gold:#a66a12; --gold-soft:#fbefd6;
+  --scrim:rgba(10,16,32,.45);
+  --display:"Big Shoulders Display","Big Shoulders","Arial Narrow","Helvetica Neue",Arial,sans-serif;
+  --body:"Public Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --ease:cubic-bezier(.2,.8,.2,1); --spring:cubic-bezier(.34,1.56,.64,1);
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --paper:#090f1e; --card:#111a30; --ink:#eef2fb; --mute:#95a1be; --line:#232f4e; --sunk:#0d1528;
+  --blue:#7398ff; --blue-soft:#172659; --red:#ff6c7a; --red-soft:#4a1924;
+  --ind:#a5abc4; --ind-soft:#252c44; --gold:#e6b65c; --gold-soft:#3a2c10;
+  --scrim:rgba(0,0,0,.6); color-scheme:dark } }
+:root[data-theme="dark"]{
+  --paper:#090f1e; --card:#111a30; --ink:#eef2fb; --mute:#95a1be; --line:#232f4e; --sunk:#0d1528;
+  --blue:#7398ff; --blue-soft:#172659; --red:#ff6c7a; --red-soft:#4a1924;
+  --ind:#a5abc4; --ind-soft:#252c44; --gold:#e6b65c; --gold-soft:#3a2c10;
+  --scrim:rgba(0,0,0,.6); color-scheme:dark }
+
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.45;-webkit-font-smoothing:antialiased}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--paper)}
+button,input{font:inherit;color:inherit}
+button{cursor:pointer;border:0;background:none;padding:0;-webkit-tap-highlight-color:transparent}
+a{color:var(--blue)}
+:focus-visible{outline:2px solid var(--blue);outline-offset:2px;border-radius:6px}
+.wrap{max-width:720px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.num{font-variant-numeric:tabular-nums}
+.press{transition:transform .12s var(--ease)}
+.press:active{transform:scale(.94)}
+
+/* Top bar */
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:9;background:var(--paper)}
+.top .wrap{padding-block:10px 0;display:flex;flex-direction:column;gap:10px}
+.brand{display:flex;align-items:center;gap:10px}
+.mark{width:22px;height:22px;border-radius:5px;background:linear-gradient(90deg,var(--blue) 0 46%,transparent 46% 54%,var(--red) 54%);flex:none}
+.brand h1{font-family:var(--display);font-weight:800;font-size:28px;letter-spacing:.06em;line-height:1;margin:0}
+.brand .sub{color:var(--mute);font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.brand .sp{flex:1}
+.ic{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;color:var(--mute);background:var(--sunk)}
+.ic svg{width:19px;height:19px}
+.ic.spin svg{animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.search{position:relative}
+.search input{width:100%;height:46px;border-radius:14px;border:1.5px solid var(--line);background:var(--card);padding:0 44px 0 42px;font-size:16px;outline:0;transition:border-color .15s,box-shadow .15s}
+.search input:focus{border-color:var(--blue);box-shadow:0 0 0 4px var(--blue-soft)}
+.search input::placeholder{color:var(--mute)}
+.search .glass{position:absolute;left:14px;top:14px;width:18px;height:18px;color:var(--mute);pointer-events:none}
+.search .clear{position:absolute;right:6px;top:6px;width:34px;height:34px;border-radius:10px;color:var(--mute);display:grid;place-items:center}
+.chips{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding-bottom:10px;margin-inline:-4px;padding-inline:4px}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;height:36px;padding:0 14px;border-radius:999px;background:var(--sunk);color:var(--mute);font-weight:600;font-size:14px;display:flex;align-items:center;gap:7px;transition:background .18s,color .18s,transform .12s var(--ease)}
+.chip:active{transform:scale(.94)}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--paper)}
+.chip .ct{font-size:12px;min-width:20px;height:20px;padding:0 6px;border-radius:999px;background:var(--red);color:#fff;display:grid;place-items:center}
+.chip .ct.bump{animation:bump .4s var(--spring)}
+@keyframes bump{0%{transform:scale(1)}40%{transform:scale(1.5)}100%{transform:scale(1)}}
+/* The aisle: red and blue meet in the middle while data loads */
+.rule{height:3px;display:flex;justify-content:space-between;background:var(--line);overflow:hidden}
+.rule i{display:block;height:100%;width:50%;transform:scaleX(0);transition:transform .5s var(--ease)}
+.rule i:first-child{background:var(--blue);transform-origin:left}
+.rule i:last-child{background:var(--red);transform-origin:right}
+.rule.on i{animation:meet 1.1s var(--ease) infinite}
+@keyframes meet{0%{transform:scaleX(0);opacity:1}60%{transform:scaleX(1);opacity:1}100%{transform:scaleX(1);opacity:0}}
+
+/* Feed */
+main.wrap{padding-block:12px 96px;display:flex;flex-direction:column;gap:10px}
+.meta{color:var(--mute);font-size:13px;display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center}
+.meta b{color:var(--ink);font-weight:600}
+.tag{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:3px 8px;border-radius:6px;background:var(--gold-soft);color:var(--gold)}
+.list{display:flex;flex-direction:column;gap:10px}
+.bill{position:relative;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:9px;cursor:pointer;touch-action:pan-y;transition:transform .16s var(--ease),border-color .16s,background .3s;--pc:var(--mute);--ps:var(--sunk)}
+.bill:active{transform:scale(.985)}
+.bill.sel{border-color:var(--ink)}
+.bill.D{--pc:var(--blue);--ps:var(--blue-soft)} .bill.R{--pc:var(--red);--ps:var(--red-soft)} .bill.I{--pc:var(--ind);--ps:var(--ind-soft)}
+.bill.fresh{animation:rise .45s var(--ease) both;animation-delay:calc(var(--i,0)*35ms)}
+@keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+.bill.moved{animation:flash 1.6s ease-out}
+@keyframes flash{0%,30%{background:var(--gold-soft)}100%{background:var(--card)}}
+.bill.drag{transition:none}
+.r1{display:flex;align-items:center;gap:10px;min-width:0}
+.party{flex:none;width:34px;height:34px;border-radius:50%;background:var(--ps);color:var(--pc);display:grid;place-items:center;font-family:var(--display);font-weight:800;font-size:18px;transition:background .3s,color .3s}
+.party.q::after{content:"";width:8px;height:8px;border-radius:50%;background:currentColor;opacity:.35}
+.bn{font-family:var(--display);font-weight:800;font-size:24px;letter-spacing:.02em;line-height:1;white-space:nowrap}
+.pill{font-size:12px;font-weight:700;padding:4px 9px;border-radius:999px;background:var(--sunk);color:var(--mute);white-space:nowrap}
+.pill.t-law{background:var(--gold-soft);color:var(--gold)}
+.pill.t-pass{background:var(--ink);color:var(--paper)}
+.pill.t-new{background:var(--red);color:#fff;animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.6}}
+.r1 .sp{flex:1 1 0;min-width:0}
+.r1 .pill{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.r1 .bn{flex:none}
+.star{flex:none;width:40px;height:40px;margin:-6px -6px -6px 0;border-radius:12px;display:grid;place-items:center;color:var(--mute);position:relative}
+.star svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linejoin:round;transition:transform .35s var(--spring),fill .2s,color .2s}
+.star:active svg{transform:scale(.8)}
+.star.on{color:var(--gold)} .star.on svg{fill:currentColor}
+.star.pop svg{animation:pop .5s var(--spring)}
+@keyframes pop{0%{transform:scale(.4) rotate(-30deg)}60%{transform:scale(1.35) rotate(8deg)}100%{transform:none}}
+.spark{position:absolute;left:50%;top:50%;width:6px;height:6px;margin:-3px;border-radius:50%;pointer-events:none;animation:spark .6s var(--ease) forwards}
+@keyframes spark{from{transform:rotate(var(--a)) translateY(0) scale(1);opacity:1}to{transform:rotate(var(--a)) translateY(-26px) scale(.2);opacity:0}}
+.ttl{font-weight:600;font-size:15.5px;line-height:1.35;margin:0;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;text-wrap:pretty}
+.act{color:var(--mute);font-size:13.5px;margin:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.act b{color:var(--ink);font-weight:600}
+.track{display:flex;gap:3px}
+.track i{flex:1;height:5px;border-radius:3px;background:var(--sunk);position:relative;overflow:hidden}
+.track i.f::after{content:"";position:absolute;inset:0;background:var(--pc);transform-origin:left;animation:fill .5s var(--ease) both;animation-delay:calc(var(--s)*70ms + 120ms)}
+.track i.g::after{background:var(--gold)}
+@keyframes fill{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+.by{font-size:12.5px;color:var(--mute);display:flex;gap:6px;flex-wrap:wrap;min-height:18px}
+.by .skel{width:150px;height:10px;border-radius:5px;margin-top:4px;background:linear-gradient(90deg,var(--sunk) 25%,var(--line) 50%,var(--sunk) 75%);background-size:200% 100%;animation:shim 1.2s linear infinite}
+@keyframes shim{to{background-position:-200% 0}}
+.swipehint{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--gold);font-weight:700;font-size:13px;opacity:0;pointer-events:none}
+
+.panel{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:10px}
+.panel h2{font-family:var(--display);font-weight:800;font-size:22px;letter-spacing:.03em;margin:0;line-height:1.1}
+.panel p{margin:0;color:var(--mute);font-size:14px}
+.panel .row{display:flex;gap:8px;flex-wrap:wrap}
+.panel input{flex:1;min-width:0;height:44px;border-radius:12px;border:1.5px solid var(--line);background:var(--paper);padding:0 12px;font-size:16px;outline:0}
+.panel input:focus{border-color:var(--blue)}
+.btn{height:44px;padding:0 16px;border-radius:12px;font-weight:700;background:var(--ink);color:var(--paper);display:inline-flex;align-items:center;gap:8px;text-decoration:none;transition:transform .12s var(--ease)}
+.btn:active{transform:scale(.95)}
+.btn.ghost{background:var(--sunk);color:var(--ink)}
+.err{color:var(--red);font-weight:600;font-size:14px}
+.empty{text-align:center;color:var(--mute);padding:28px 8px;display:flex;flex-direction:column;gap:12px;align-items:center}
+.empty strong{color:var(--ink);font-size:16px}
+#more{height:1px}
+
+/* Sheet */
+.scrim{position:fixed;inset:0;background:var(--scrim);z-index:20;opacity:0;pointer-events:none;transition:opacity .25s}
+.scrim.on{opacity:1;pointer-events:auto}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:21;max-width:720px;margin:0 auto;max-height:92%;background:var(--card);border-radius:22px 22px 0 0;display:flex;flex-direction:column;transform:translateY(105%);transition:transform .38s var(--ease);--pc:var(--mute);--ps:var(--sunk)}
+.sheet.on{transform:none}
+.sheet.drag{transition:none}
+.sheet.D{--pc:var(--blue);--ps:var(--blue-soft)} .sheet.R{--pc:var(--red);--ps:var(--red-soft)} .sheet.I{--pc:var(--ind);--ps:var(--ind-soft)}
+.grab{flex:none;padding:8px 0 4px;touch-action:none;cursor:grab}
+.grab i{display:block;width:40px;height:5px;border-radius:3px;background:var(--line);margin:0 auto}
+.shead{flex:none;display:flex;align-items:center;gap:10px;padding:4px max(16px,env(safe-area-inset-right,0px)) 10px max(16px,env(safe-area-inset-left,0px));touch-action:none}
+.shead .bn{font-size:38px}
+.shead .party{width:42px;height:42px;font-size:22px}
+.sbody{overflow-y:auto;overscroll-behavior:contain;padding:0 max(16px,env(safe-area-inset-right,0px)) 16px max(16px,env(safe-area-inset-left,0px));display:flex;flex-direction:column;gap:18px}
+.sbody h2{font-size:19px;line-height:1.3;margin:0;font-weight:700;text-wrap:balance}
+.sbody h3{font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute);margin:0 0 8px;font-weight:700}
+.sbody section p{margin:0 0 8px}
+.steps{display:flex;gap:3px;margin-top:6px}
+.steps span{flex:1;font-size:10.5px;color:var(--mute);font-weight:600;line-height:1.2;min-width:0;overflow-wrap:anywhere}
+.steps span.f{color:var(--ink)}
+.track.big i{height:8px;border-radius:4px}
+.kv{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center}
+.aislebar{display:flex;height:14px;border-radius:7px;overflow:hidden;background:var(--sunk);gap:2px}
+.aislebar i{display:block;height:100%;width:0;transition:width .7s var(--ease)}
+.aislebar .d{background:var(--blue)} .aislebar .i{background:var(--ind)} .aislebar .r{background:var(--red)}
+.split{display:flex;justify-content:space-between;font-size:13px;font-weight:600;margin-top:6px}
+.split .d{color:var(--blue)} .split .r{color:var(--red)} .split .i{color:var(--ind)}
+.sum{color:var(--ink);font-size:14.5px}
+.sum.clamp{display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;overflow:hidden}
+.link{color:var(--blue);font-weight:600;font-size:14px}
+.tl{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.tl li{display:grid;grid-template-columns:86px 14px 1fr;gap:8px;padding-bottom:14px;position:relative;font-size:13.5px}
+.tl li::before{content:"";position:absolute;left:100px;top:14px;bottom:-4px;width:2px;background:var(--line)}
+.tl li:last-child::before{display:none}
+.tl time{color:var(--mute);font-size:12.5px;padding-top:1px}
+.tl .dot{width:10px;height:10px;border-radius:50%;background:var(--card);border:2.5px solid var(--pc);margin:4px 2px 0;position:relative;z-index:1}
+.tl li.k .dot{background:var(--gold);border-color:var(--gold)}
+.tl div{min-width:0;overflow-wrap:anywhere}
+.sfoot{flex:none;display:flex;gap:8px;padding:10px max(16px,env(safe-area-inset-right,0px)) calc(10px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));border-top:1px solid var(--line)}
+.sfoot .btn{flex:1;justify-content:center;min-width:0;padding:0 10px;font-size:14px}
+.sfoot .nav{flex:none;width:44px;padding:0}
+.btn svg{width:18px;height:18px;flex:none}
+
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translate(-50%,80px);background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:999px;font-weight:600;font-size:14px;z-index:30;opacity:0;transition:transform .35s var(--spring),opacity .2s;pointer-events:none;max-width:calc(100% - 32px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.toast.on{transform:translate(-50%,0);opacity:1}
+.sheet.on~.toast{bottom:calc(78px + env(safe-area-inset-bottom,0px))}
+.keys{display:none;color:var(--mute);font-size:12px}
+@media (hover:hover) and (min-width:800px){ .keys{display:block} .bill:hover{border-color:var(--mute)} }
+kbd{font-family:inherit;font-size:11px;font-weight:700;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:0 5px;background:var(--card);color:var(--ink)}
+@media (prefers-reduced-motion:reduce){ *,*::before,*::after{animation-duration:.01ms!important;animation-delay:0s!important;transition-duration:.01ms!important} }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <div class="brand">
+      <span class="mark" aria-hidden="true"></span>
+      <h1>AISLE</h1>
+      <span class="sub" id="cong"></span>
+      <span class="sp"></span>
+      <button class="ic press" id="sync" aria-label="Refresh from Congress.gov"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2.3 6.3"/><path d="M20 4v7h-7"/></svg></button>
+      <button class="ic press" id="keybtn" aria-label="Congress.gov connection"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M16 7l3 3"/></svg></button>
+    </div>
+    <div class="search">
+      <svg class="glass" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+      <input id="q" type="search" inputmode="search" enterkeyhint="search" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="hr 22, a title, or a sponsor" aria-label="Search bills">
+      <button class="clear press" id="qx" aria-label="Clear search" hidden><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
+    <div class="chips" id="chips" role="toolbar" aria-label="Filter"></div>
+  </div>
+  <div class="rule" id="rule"><i></i><i></i></div>
+</header>
+
+<main class="wrap">
+  <div id="setup"></div>
+  <div class="meta" id="meta"></div>
+  <div class="list" id="list"></div>
+  <div id="more"></div>
+  <p class="keys"><kbd>/</kbd> search &nbsp; <kbd>J</kbd> <kbd>K</kbd> move &nbsp; <kbd>Enter</kbd> open &nbsp; <kbd>S</kbd> watch &nbsp; <kbd>1</kbd>–<kbd>5</kbd> filters &nbsp; <kbd>Esc</kbd> close</p>
+</main>
+
+<div class="scrim" id="scrim"></div>
+<aside class="sheet" id="sheet" role="dialog" aria-modal="true" aria-label="Bill detail">
+  <div class="grab" id="grab"><i></i></div>
+  <div class="shead" id="shead"></div>
+  <div class="sbody" id="sbody"></div>
+  <div class="sfoot" id="sfoot"></div>
+</aside>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+(function(){
+"use strict";
+var $=function(s){return document.querySelector(s)};
+var LS={get:function(k,d){try{var v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}},set:function(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
+var now=new Date();
+var CONGRESS=Math.floor((now.getFullYear()-1789)/2)+1;
+function ord(n){var s=["th","st","nd","rd"],v=n%100;return n+(s[(v-20)%10]||s[v]||s[0])}
+var LBL={HR:"H.R.",S:"S.",HJRES:"H.J. Res.",SJRES:"S.J. Res.",HCONRES:"H. Con. Res.",SCONRES:"S. Con. Res.",HRES:"H. Res.",SRES:"S. Res."};
+var SLUG={HR:"house-bill",S:"senate-bill",HJRES:"house-joint-resolution",SJRES:"senate-joint-resolution",HCONRES:"house-concurrent-resolution",SCONRES:"senate-concurrent-resolution",HRES:"house-resolution",SRES:"senate-resolution"};
+var MON=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+function pd(s){if(!s)return null;var m=/^(\d{4})-(\d\d)-(\d\d)/.exec(s);return m?new Date(+m[1],+m[2]-1,+m[3]):null}
+function fd(s){var d=pd(s);return d?MON[d.getMonth()]+" "+d.getDate()+", "+d.getFullYear():""}
+function rel(s){var d=pd(s);if(!d)return"";var days=Math.round((new Date(now.getFullYear(),now.getMonth(),now.getDate())-d)/864e5);
+  if(days<=0)return"Today";if(days===1)return"Yesterday";if(days<7)return days+"d ago";return fd(s)}
+function label(b){return(LBL[b.t]||b.t)+" "+b.n}
+
+/* Example rows: real bills pulled from Congress.gov on Nov 9, 2026, shown until a key is connected. */
+var SAMPLE_DATE="Nov 9, 2026";
+var SAMPLE=[
+ ["HR","4405","Epstein Files Transparency Act","2025-07-15","2025-11-19","Became Public Law No: 119-38.","Rep. Khanna, Ro [D-CA-17]","D","Crime and Law Enforcement",24],
+ ["S","1582","GENIUS Act","2025-05-01","2025-07-18","Became Public Law No: 119-27.","Sen. Hagerty, Bill [R-TN]","R","Finance and Financial Sector",5],
+ ["HR","1","An act to provide for reconciliation pursuant to title II of H. Con. Res. 14.","2025-05-20","2025-07-04","Became Public Law No: 119-21.",null,null,null,0],
+ ["HR","15","Equality Act","2025-04-29","2025-04-29","Referred to the Committee on the Judiciary, and in addition to the Committees on Education and Workforce, Financial…","Rep. Takano, Mark [D-CA-39]","D","Civil Rights and Liberties, Minority Issues",218],
+ ["HR","22","SAVE Act","2025-01-03","2025-04-10","Received in the Senate.","Rep. Roy, Chip [R-TX-21]","R","Government Operations and Politics",110],
+ ["S","770","Social Security Expansion Act","2025-02-27","2025-02-27","Read twice and referred to the Committee on Finance.","Sen. Sanders, Bernard [I-VT]","I","Social Welfare",10],
+ ["S","5","Laken Riley Act","2025-01-06","2025-01-29","Became Public Law No: 119-1.","Sen. Britt, Katie Boyd [R-AL]","R","Immigration",53],
+ ["HR","4845","To designate the National Memorial Day Parade, and for other purposes.","2025-08-01","2025-08-01","Referred to the Committee on Oversight and Government Reform, and in addition to the Committee on Armed Services,…",null,null,null,null]
+];
+
+var S={key:LS.get("aisle.key",""),bills:new Map(),det:LS.get("aisle.det",{}),watch:LS.get("aisle.watch",{}),
+  filter:LS.get("aisle.filter","all"),q:"",total:null,offset:0,more:false,live:false,loading:false,err:null,sync:null,
+  shown:40,sel:-1,anim:true,showKey:false,open:null,booted:false,lawsLoaded:false,moved:{},view:[]};
+if(["all","house","senate","laws","watching"].indexOf(S.filter)<0)S.filter="all";
+
+function bid(c,t,n){return c+"-"+String(t).toLowerCase()+"-"+n}
+function norm(x){var t=String(x.type||"").toUpperCase();
+  return{id:bid(x.congress,t,x.number),c:x.congress,t:t,n:String(x.number),title:x.title||"",intro:x.introducedDate||"",
+    ad:x.latestAction&&x.latestAction.actionDate||"",at:x.latestAction&&x.latestAction.text||"",
+    ch:x.originChamber||(t.charAt(0)==="H"?"House":"Senate"),upd:x.updateDate||"",laws:x.laws||null}}
+function merge(b){var e=S.bills.get(b.id),changed=false;
+  if(e){changed=!!(b.ad&&(e.ad!==b.ad||e.at!==b.at));for(var k in b){if(b[k]!==""&&b[k]!=null)e[k]=b[k]}if(changed)S.moved[b.id]=1}
+  else S.bills.set(b.id,b);
+  return changed}
+function seedSample(){S.bills.clear();SAMPLE.forEach(function(r){var b={id:bid(CONGRESS,r[0],r[1]),c:119,t:r[0],n:r[1],title:r[2],intro:r[3],ad:r[4],at:r[5],ch:r[0]==="S"?"Senate":"House",upd:"",laws:null};
+  b.id=bid(119,r[0],r[1]);S.bills.set(b.id,b);if(r[6])S.det[b.id]={s:r[6],p:r[7],pa:r[8],co:r[9],x:1}})}
+
+/* ---------- Congress.gov ---------- */
+function api(path,params){
+  var url="https://api.congress.gov/v3/"+path+"?format=json&api_key="+encodeURIComponent(S.key)+(params?"&"+params:"");
+  return fetch(url,{headers:{Accept:"application/json"}}).then(function(r){
+    if(!r.ok){var e=new Error("http");e.status=r.status;throw e}
+    return r.json()})}
+function explain(e){
+  if(e&&e.status===403)return"Congress.gov rejected that key. Check it for typos.";
+  if(e&&e.status===429)return"Congress.gov rate limit reached (5,000 requests an hour). Try again shortly.";
+  if(e&&e.status===404)return"Congress.gov has no bill with that number.";
+  if(e&&e.status)return"Congress.gov returned an error ("+e.status+").";
+  return"This page can't reach Congress.gov from here. Inside the Claude preview that is expected; the hosted copy connects normally."}
+function bar(on){$("#rule").classList.toggle("on",on);$("#sync").classList.toggle("spin",on)}
+
+function loadPage(reset){
+  if(S.loading||!S.key)return Promise.resolve();
+  S.loading=true;bar(true);
+  var off=reset?0:S.offset;
+  return api("bill/"+CONGRESS,"limit=250&offset="+off+"&sort=updateDate+desc").then(function(d){
+    if(!S.live){S.bills.clear();for(var k in S.det){if(S.det[k].x)delete S.det[k]}S.live=true;S.anim=true}
+    var moved=0;(d.bills||[]).forEach(function(x){if(merge(norm(x)))moved++});
+    if(d.pagination&&d.pagination.count!=null)S.total=d.pagination.count;
+    S.offset=reset?Math.max(S.offset,250):off+250;
+    S.more=S.offset<(S.total||0);S.sync=new Date();S.err=null;
+    if(reset&&S.booted)toast(moved?moved+" bill"+(moved>1?"s":"")+" moved":"Up to date");
+    S.booted=true;
+  }).catch(function(e){S.err=explain(e)}).then(function(){S.loading=false;bar(false);render();S.moved={}})}
+function loadLaws(){
+  if(S.lawsLoaded||!S.live)return;S.lawsLoaded=true;bar(true);
+  api("law/"+CONGRESS,"limit=250").then(function(d){(d.bills||[]).forEach(function(x){var b=norm(x);if(!b.laws)b.laws=[{}];merge(b)});S.moved={}})
+   .catch(function(){S.lawsLoaded=false}).then(function(){bar(false);render()})}
+
+/* sponsor + party arrive per bill, fetched only for cards on screen */
+var queue=[],active=0,pending={},saveT=0;
+function fromDetail(x){var sp=x.sponsors&&x.sponsors[0]||{};
+  return{s:sp.fullName||"",p:sp.party||"",pa:x.policyArea&&x.policyArea.name||"",co:x.cosponsors?x.cosponsors.count:0}}
+function saveDet(){clearTimeout(saveT);saveT=setTimeout(function(){var keys=Object.keys(S.det);
+  if(keys.length>1500){keys.slice(0,keys.length-1500).forEach(function(k){delete S.det[k]})}LS.set("aisle.det",S.det)},800)}
+function need(id){if(!S.live||S.det[id]||pending[id])return;pending[id]=1;queue.push(id);pump()}
+function pump(){while(active<4&&queue.length){(function(id){active++;var b=S.bills.get(id);
+  if(!b){active--;delete pending[id];return}
+  api("bill/"+b.c+"/"+b.t.toLowerCase()+"/"+b.n).then(function(d){if(d.bill){S.det[id]=fromDetail(d.bill);saveDet();patchCard(id)}})
+   .catch(function(){}).then(function(){active--;delete pending[id];pump()})})(queue.shift())}}
+function fetchBill(c,t,n){return api("bill/"+c+"/"+t+"/"+n).then(function(d){var b=norm(d.bill);merge(b);S.det[b.id]=fromDetail(d.bill);saveDet();return S.bills.get(b.id)})}
+
+function refreshWatched(){
+  if(!S.live)return;
+  Object.keys(S.watch).forEach(function(id){var m=/^(\d+)-([a-z]+)-(\d+)$/.exec(id);if(!m)return;
+    fetchBill(m[1],m[2],m[3]).then(function(b){var w=S.watch[id];if(!w)return;
+      if(w.ad!==b.ad||w.at!==b.at){w.changed=true;LS.set("aisle.watch",S.watch);patchCard(id);chips()}
+      w.b=snap(b)}).catch(function(){})})}
+function snap(b){return{id:b.id,c:b.c,t:b.t,n:b.n,title:b.title,intro:b.intro,ad:b.ad,at:b.at,ch:b.ch}}
+
+/* ---------- Stage ---------- */
+var RX={law:/became (public|private) law/i,veto:/vetoed|veto message/i,pres:/presented to president|signed by president/i,
+  hp:/received in the senate|passed\/agreed to in house|on passage passed|passed house|agreed to in house|on motion to suspend the rules and (pass|agree)[^.]*agreed to/i,
+  sp:/received in the house|held at the desk|passed senate|passed\/agreed to in senate|agreed to in senate|message on senate action/i,
+  rep:/reported|placed on (the )?(union|house|senate legislative) calendar/i,com:/referred to|committee/i};
+function stage(b,texts){
+  texts=texts&&texts.length?texts:[b.at||""];
+  function any(r){for(var i=0;i<texts.length;i++){if(r.test(texts[i]))return true}return false}
+  var house=b.ch==="House",o=house?"House":"Senate",x=house?"Senate":"House";
+  var simple=b.t==="HRES"||b.t==="SRES",conc=b.t==="HCONRES"||b.t==="SCONRES";
+  var op=any(house?RX.hp:RX.sp),xp=any(house?RX.sp:RX.hp),law=any(RX.law)||!!(b.laws&&b.laws.length),veto=any(RX.veto)&&!law,pres=any(RX.pres),rep=any(RX.rep),com=any(RX.com);
+  var steps,lv,text,tone="";
+  if(simple){steps=["Introduced","Committee","Agreed to"];lv=op?2:(rep||com)?1:0}
+  else if(conc){steps=["Introduced","Committee",o,x];lv=xp?3:op?2:(rep||com)?1:0}
+  else{steps=["Introduced","Committee",o,x,"President","Law"];lv=law?5:(pres||veto)?4:xp?3:op?2:(rep||com)?1:0}
+  if(law){text="Law";tone="t-law"}
+  else if(veto){text="Vetoed";tone="t-pass"}
+  else if(pres){text="At the President";tone="t-pass"}
+  else if(simple&&lv===2){text="Agreed to";tone="t-pass"}
+  else if(lv===3){text=conc?"Agreed to by both":"Passed both chambers";tone="t-pass"}
+  else if(lv===2){text="Passed "+o;tone="t-pass"}
+  else if(rep){text="Reported"}
+  else if(com){text="In committee"}
+  else text="Introduced";
+  return{steps:steps,lv:lv,text:text,tone:tone,law:law}}
+function trackHTML(st,big){var h='<div class="track'+(big?" big":"")+'" aria-hidden="true">';
+  for(var i=0;i<st.steps.length;i++)h+='<i class="'+(i<=st.lv?"f":"")+(st.law&&i===st.steps.length-1?" g":"")+'" style="--s:'+i+'"></i>';
+  return h+"</div>"}
+
+/* ---------- Render ---------- */
+var STAR='<svg viewBox="0 0 24 24"><path d="M12 3.2l2.7 5.6 6.1.8-4.5 4.3 1.1 6.1L12 17.1 6.6 20l1.1-6.1L3.2 9.6l6.1-.8z"/></svg>';
+function view(){
+  var arr;
+  if(S.filter==="watching"){arr=Object.keys(S.watch).map(function(id){return S.bills.get(id)||S.watch[id].b}).filter(Boolean)}
+  else{arr=Array.from(S.bills.values());
+    if(S.filter==="house")arr=arr.filter(function(b){return b.ch==="House"});
+    if(S.filter==="senate")arr=arr.filter(function(b){return b.ch==="Senate"});
+    if(S.filter==="laws")arr=arr.filter(function(b){return(b.laws&&b.laws.length)||RX.law.test(b.at)})}
+  var q=S.q.trim().toLowerCase();
+  if(q){var toks=q.split(/\s+/),flat=q.replace(/[.\s]/g,"");
+    arr=arr.filter(function(b){var d=S.det[b.id]||{};var hay=(label(b)+" "+b.t+b.n+" "+b.title+" "+(d.s||"")+" "+(d.pa||"")+" "+b.at).toLowerCase();
+      if((b.t+b.n).toLowerCase()===flat)return true;
+      for(var i=0;i<toks.length;i++){if(hay.indexOf(toks[i])<0)return false}return true})}
+  arr.sort(function(a,b){
+    if(S.filter==="watching"){var ca=S.watch[a.id]&&S.watch[a.id].changed?1:0,cb=S.watch[b.id]&&S.watch[b.id].changed?1:0;if(ca!==cb)return cb-ca}
+    return a.ad<b.ad?1:a.ad>b.ad?-1:(a.upd<b.upd?1:a.upd>b.upd?-1:0)});
+  return arr}
+function cite(q){var m=/^(hconres|sconres|hjres|sjres|hres|sres|hr|s)(\d{1,5})$/.exec(q.toLowerCase().replace(/[.\s]/g,""));return m?{t:m[1],n:m[2]}:null}
+
+function cardHTML(b,i){
+  var d=S.det[b.id],p=d&&d.p?(d.p==="D"||d.p==="R"?d.p:"I"):"",st=stage(b),w=S.watch[b.id];
+  var by=d?(d.s?esc(d.s):"")+(d.pa?(d.s?" · ":"")+esc(d.pa):""):(S.live?'<span class="skel"></span>':"");
+  return'<article class="bill '+p+(S.anim&&i<12?" fresh":"")+(S.moved[b.id]?" moved":"")+(i===S.sel?" sel":"")+'" data-id="'+b.id+'" style="--i:'+i+'" tabindex="0" role="button" aria-label="'+esc(label(b)+": "+b.title)+'">'+
+    '<span class="swipehint">'+(w?"Unwatch":"Watch")+'</span>'+
+    '<div class="r1"><span class="party'+(p?"":" q")+'" title="'+(p?"Sponsor party":"Sponsor not loaded")+'">'+(d&&d.p?esc(d.p.charAt(0)):"")+'</span>'+
+    '<span class="bn num">'+esc(label(b))+'</span><span class="sp"></span>'+
+    (w&&w.changed?'<span class="pill t-new">New action</span>':'<span class="pill '+st.tone+'">'+st.text+'</span>')+
+    '<button class="star'+(w?" on":"")+'" data-star="'+b.id+'" aria-pressed="'+(w?"true":"false")+'" aria-label="'+(w?"Stop watching ":"Watch ")+esc(label(b))+'">'+STAR+'</button></div>'+
+    '<p class="ttl">'+esc(b.title)+'</p>'+
+    '<p class="act"><b class="num">'+esc(rel(b.ad))+'</b> '+esc(b.at)+'</p>'+
+    trackHTML(st)+
+    '<div class="by">'+by+'</div></article>'}
+var dio=("IntersectionObserver" in window)?new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){need(e.target.dataset.id);dio.unobserve(e.target)}})},{rootMargin:"300px"}):null;
+function watchCards(){if(!dio||!S.live)return;document.querySelectorAll("#list .bill").forEach(function(el){if(!S.det[el.dataset.id])dio.observe(el)})}
+function patchCard(id){var el=document.querySelector('#list .bill[data-id="'+id+'"]');
+  if(el){var i=S.view.findIndex(function(b){return b.id===id}),b=S.view[i]||S.bills.get(id);if(b){var keep=S.anim;S.anim=false;el.outerHTML=cardHTML(b,i);S.anim=keep}}
+  if(S.open===id)sheetHead()}
+
+function chips(bump){
+  var n=Object.keys(S.watch).length,ch=Object.keys(S.watch).filter(function(k){return S.watch[k].changed}).length;
+  var defs=[["all","All"],["house","House"],["senate","Senate"],["laws","Became law"],["watching","Watching"]];
+  $("#chips").innerHTML=defs.map(function(d){return'<button class="chip" data-f="'+d[0]+'" aria-pressed="'+(S.filter===d[0])+'">'+d[1]+
+    (d[0]==="watching"&&n?'<span class="ct num'+(bump?" bump":"")+'"'+(ch?"":' style="background:var(--mute)"')+'>'+(ch||n)+'</span>':"")+'</button>'}).join("")}
+function setup(){
+  var el=$("#setup");
+  if(S.key&&!S.showKey&&!S.err){el.innerHTML="";return}
+  el.innerHTML='<div class="panel"><h2>'+(S.key?"CONGRESS.GOV CONNECTION":"CONNECT TO CONGRESS.GOV")+'</h2>'+
+    '<p>'+(S.key?"Your key is saved in this browser only.":"Paste your free Congress.gov API key to load every bill in the "+ord(CONGRESS)+" Congress. The key stays in this browser.")+'</p>'+
+    (S.err?'<p class="err">'+esc(S.err)+'</p>':"")+
+    '<form class="row" id="keyform"><input id="key" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="API key" aria-label="Congress.gov API key" value="'+esc(S.key)+'">'+
+    '<button class="btn" type="submit">'+(S.key?"Save":"Connect")+'</button></form>'+
+    '<div class="row"><a class="link" href="https://api.congress.gov/sign-up/" target="_blank" rel="noopener">Get a key (free, about a minute)</a>'+
+    (S.key?'<button class="link" id="forget" type="button">Remove key</button>':"")+'</div></div>'}
+function meta(){
+  var el=$("#meta"),n=S.view.length;
+  if(!S.live){el.innerHTML='<span class="tag">Example</span><span>'+SAMPLE.length+' real bills as they stood on Congress.gov, '+SAMPLE_DATE+'</span>';return}
+  el.innerHTML='<span><b class="num" id="tot">'+(S.total!=null?S.total.toLocaleString():"")+'</b> bills and resolutions</span><span class="num">'+S.bills.size.toLocaleString()+' loaded</span>'+
+    (S.q||S.filter!=="all"?'<span class="num"><b>'+n.toLocaleString()+'</b> shown</span>':"")+
+    (S.sync?'<span>Synced '+S.sync.toLocaleTimeString([], {hour:"numeric",minute:"2-digit"})+'</span>':"")}
+function listHTML(){
+  var arr=S.view,h="",q=S.q.trim(),c=q&&cite(q);
+  if(c&&S.live&&!S.bills.has(bid(CONGRESS,c.t,c.n))){
+    h+='<div class="panel"><p>Not loaded yet.</p><div class="row"><button class="btn" data-jump="'+c.t+"-"+c.n+'">Open '+esc((LBL[c.t.toUpperCase()]||c.t)+" "+c.n)+'</button></div></div>'}
+  if(!arr.length){
+    if(S.filter==="watching"&&!q)return h+'<div class="empty"><strong>Nothing on your watchlist</strong><span>Tap the star on any bill, or swipe a card right. Aisle flags watched bills the moment they move.</span></div>';
+    if(S.loading)return h+'<div class="empty"><span>Loading from Congress.gov</span></div>';
+    return h+'<div class="empty"><strong>No loaded bill matches</strong>'+
+      (q?'<span>Congress.gov\'s data feed has no keyword search, so Aisle searches the '+S.bills.size.toLocaleString()+' bills loaded so far. A bill number like "hr 22" always works.</span>':"")+
+      '<div class="row" style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">'+(S.live&&S.more?'<button class="btn" data-more="1">Load 250 more</button>':"")+
+      (q?'<a class="btn ghost" target="_blank" rel="noopener" href="https://www.congress.gov/search?q='+encodeURIComponent(JSON.stringify({source:"legislation",search:q}))+'">Search Congress.gov</a>':"")+'</div></div>'}
+  var lim=Math.min(arr.length,S.shown);
+  for(var i=0;i<lim;i++)h+=cardHTML(arr[i],i);
+  if(lim>=arr.length&&S.live&&S.more&&(S.q||S.filter!=="all"))h+='<div class="empty"><button class="btn ghost" data-more="1">Load 250 more from Congress.gov</button></div>';
+  return h}
+function render(){
+  S.view=view();if(S.sel>=S.view.length)S.sel=-1;
+  $("#cong").textContent=ord(CONGRESS)+" Congress";
+  chips();setup();meta();
+  $("#list").innerHTML=listHTML();S.anim=false;watchCards();
+  $("#qx").hidden=!S.q}
+
+/* ---------- Sheet ---------- */
+var X={};
+function partyOf(id){var d=S.det[id];return d&&d.p?(d.p==="D"||d.p==="R"?d.p:"I"):""}
+function sheetHead(){
+  var b=S.bills.get(S.open)||(S.watch[S.open]&&S.watch[S.open].b);if(!b)return;
+  var d=S.det[b.id],p=partyOf(b.id),w=S.watch[b.id];
+  $("#sheet").className="sheet on "+p;
+  $("#shead").innerHTML='<span class="party'+(p?"":" q")+'">'+(d&&d.p?esc(d.p.charAt(0)):"")+'</span><span class="bn num">'+esc(label(b))+'</span><span class="sp" style="flex:1"></span>'+
+    '<button class="star'+(w?" on":"")+'" data-star="'+b.id+'" aria-pressed="'+(w?"true":"false")+'" aria-label="'+(w?"Stop watching":"Watch")+'" style="margin:0">'+STAR+'</button>'+
+    '<button class="ic press" id="close" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>'}
+function sheetBody(){
+  var b=S.bills.get(S.open)||(S.watch[S.open]&&S.watch[S.open].b);if(!b)return;
+  var d=S.det[b.id]||{},x=X[b.id]||{},st=stage(b,x.actions&&x.actions.map(function(a){return a.text||""}));
+  var h='<div><h2>'+esc(b.title)+'</h2></div>';
+  h+='<section><div class="kv" style="margin-bottom:10px"><span class="pill '+st.tone+'">'+st.text+'</span>'+(b.intro?'<span style="color:var(--mute);font-size:13px">Introduced '+fd(b.intro)+'</span>':"")+'</div>'+trackHTML(st,true)+
+     '<div class="steps">'+st.steps.map(function(s,i){return'<span class="'+(i<=st.lv?"f":"")+'">'+s+'</span>'}).join("")+'</div></section>';
+  h+='<section><h3>Latest action</h3><p><b class="num">'+fd(b.ad)+'</b></p><p>'+esc(b.at)+'</p></section>';
+  if(d.s||d.pa)h+='<section><h3>Sponsor</h3><p style="font-weight:600">'+esc(d.s||"Not listed")+'</p>'+(d.pa?'<p style="color:var(--mute);font-size:13.5px">Policy area: '+esc(d.pa)+'</p>':"")+'</section>';
+  if(d.co!=null&&(d.s||d.co)){
+    h+='<section><h3>Across the aisle</h3>';
+    if(x.cos){var c=x.cos,t=(c.D+c.R+c.I)||1;
+      h+='<div class="aislebar" id="ab" data-d="'+(c.D/t*100)+'" data-i="'+(c.I/t*100)+'" data-r="'+(c.R/t*100)+'"><i class="d"></i><i class="i"></i><i class="r"></i></div>'+
+        '<div class="split num"><span class="d">'+c.D+' Democrat'+(c.D===1?"":"s")+'</span>'+(c.I?'<span class="i">'+c.I+' Ind.</span>':"")+'<span class="r">'+c.R+' Republican'+(c.R===1?"":"s")+'</span></div>'+
+        (d.co>250?'<p style="color:var(--mute);font-size:12.5px;margin-top:6px">Split is from the first 250 of '+d.co+' cosponsors.</p>':"")}
+    else h+='<p class="num">'+(d.co===0?"No cosponsors.":d.co+" cosponsor"+(d.co===1?"":"s")+(S.live?"":". The party split loads once connected."))+'</p>';
+    h+='</section>'}
+  if(x.sum)h+='<section><h3>Summary'+(x.sumv?" · "+esc(x.sumv):"")+'</h3><div class="sum clamp" id="sum">'+x.sum.map(function(p){return"<p>"+esc(p)+"</p>"}).join("")+'</div><button class="link" id="sumx" type="button">Read more</button></section>';
+  if(x.actions){
+    h+='<section><h3>Every action · '+x.actions.length+'</h3><ol class="tl">'+x.actions.map(function(a){var k=/BecameLaw|President/.test(a.type||"")||RX.hp.test(a.text)||RX.sp.test(a.text);
+      return'<li class="'+(k?"k":"")+'"><time class="num">'+fd(a.actionDate)+'</time><span class="dot"></span><div>'+esc(a.text)+'</div></li>'}).join("")+'</ol></section>'}
+  else if(S.live)h+='<section><h3>Every action</h3><p style="color:var(--mute)">'+(x.fail?"Couldn't load the timeline.":"Loading the timeline")+'</p></section>';
+  else h+='<section><p style="color:var(--mute);font-size:13.5px">The full action timeline, summary and cosponsor split load once Aisle is connected to Congress.gov.</p></section>';
+  $("#sbody").innerHTML=h;
+  var ab=$("#ab");if(ab)requestAnimationFrame(function(){requestAnimationFrame(function(){ab.children[0].style.width=ab.dataset.d+"%";ab.children[1].style.width=ab.dataset.i+"%";ab.children[2].style.width=ab.dataset.r+"%"})});
+  var year=(b.intro||"").slice(0,4);
+  $("#sfoot").innerHTML='<button class="btn ghost nav press" id="prev" aria-label="Previous bill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>'+
+    '<button class="btn ghost" id="copy" data-c="'+esc(label(b)+", "+ord(b.c)+" Cong."+(year?" ("+year+")":""))+'">Copy citation</button>'+
+    '<a class="btn" target="_blank" rel="noopener" href="https://www.congress.gov/bill/'+ord(b.c)+'-congress/'+(SLUG[b.t]||"house-bill")+'/'+b.n+'">Congress.gov</a>'+
+    '<button class="btn ghost nav press" id="next" aria-label="Next bill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></button>'}
+function loadExtras(id){
+  if(!S.live||X[id])return;var b=S.bills.get(id);if(!b)return;var base="bill/"+b.c+"/"+b.t.toLowerCase()+"/"+b.n;X[id]={};
+  var again=function(){if(S.open===id){sheetHead();sheetBody()}};
+  if(!S.det[id])fetchBill(b.c,b.t.toLowerCase(),b.n).then(function(){patchCard(id);again()}).catch(function(){});
+  api(base+"/actions","limit=250").then(function(d){var seen={},out=[];(d.actions||[]).forEach(function(a){var k=a.actionDate+"|"+a.text;if(!seen[k]){seen[k]=1;out.push(a)}});
+    out.sort(function(a,c){return a.actionDate<c.actionDate?1:a.actionDate>c.actionDate?-1:0});X[id].actions=out}).catch(function(){X[id].fail=1}).then(again);
+  api(base+"/cosponsors","limit=250").then(function(d){var c={D:0,R:0,I:0};(d.cosponsors||[]).forEach(function(p){if(p.party==="D")c.D++;else if(p.party==="R")c.R++;else c.I++});
+    if(c.D+c.R+c.I)X[id].cos=c}).catch(function(){}).then(again);
+  api(base+"/summaries").then(function(d){var s=(d.summaries||[]).slice(-1)[0];if(!s||!s.text)return;
+    var doc=new DOMParser().parseFromString(s.text,"text/html"),ps=[];doc.body.querySelectorAll("p,li").forEach(function(p){var t=p.textContent.trim();if(t)ps.push(t)});
+    if(!ps.length&&doc.body.textContent.trim())ps=[doc.body.textContent.trim()];
+    if(ps.length){X[id].sum=ps;X[id].sumv=s.actionDesc||""}}).catch(function(){}).then(again)}
+function showSheet(id){
+  S.open=id;var w=S.watch[id],b=S.bills.get(id);
+  if(w&&b){w.ad=b.ad;w.at=b.at;if(w.changed){w.changed=false;chips()}LS.set("aisle.watch",S.watch);patchCard(id)}
+  sheetHead();sheetBody();$("#sbody").scrollTop=0;$("#sheet").style.transform="";
+  $("#sheet").classList.add("on");$("#scrim").classList.add("on");document.documentElement.style.overflow="hidden";
+  loadExtras(id)}
+function hideSheet(){S.open=null;$("#sheet").classList.remove("on");$("#sheet").style.transform="";$("#scrim").classList.remove("on");document.documentElement.style.overflow=""}
+function route(){
+  var id=(location.hash||"").slice(1),m=/^(\d+)-([a-z]+)-(\d+)$/.exec(id);
+  if(!m){if(S.open)hideSheet();return}
+  if(S.open===id)return;
+  if(S.bills.has(id)||(S.watch[id]&&S.watch[id].b)){showSheet(id);return}
+  if(S.live){bar(true);fetchBill(m[1],m[2],m[3]).then(function(){render();showSheet(id)}).catch(function(e){toast(explain(e));location.hash=""}).then(function(){bar(false)})}}
+function openBill(id){if(location.hash.slice(1)!==id)location.hash=id;route()}
+function closeBill(){if(location.hash.length>1)location.hash="";hideSheet()}
+function step(dir){var i=S.view.findIndex(function(b){return b.id===S.open}),n=S.view[i+dir];if(n){S.sel=i+dir;openBill(n.id)}else toast(dir>0?"End of loaded bills":"Top of the feed")}
+
+/* ---------- Actions ---------- */
+var toastT=0;
+function toast(msg){var t=$("#toast");t.textContent=msg;t.classList.add("on");clearTimeout(toastT);toastT=setTimeout(function(){t.classList.remove("on")},1900)}
+function buzz(){try{if(navigator.vibrate)navigator.vibrate(12)}catch(e){}}
+function toggleWatch(id){
+  var b=S.bills.get(id)||(S.watch[id]&&S.watch[id].b);if(!b)return;
+  var on=!S.watch[id];
+  if(on)S.watch[id]={ad:b.ad,at:b.at,b:snap(b),t:Date.now()};else delete S.watch[id];
+  LS.set("aisle.watch",S.watch);buzz();chips(true);
+  toast(on?"Watching "+label(b):"Stopped watching "+label(b));
+  if(S.filter==="watching"&&!on&&S.open!==id){render()}else patchCard(id);
+  if(on)document.querySelectorAll('[data-star="'+id+'"]').forEach(function(btn){btn.classList.add("pop");
+    for(var i=0;i<8;i++){var s=document.createElement("span");s.className="spark";s.style.setProperty("--a",(i*45)+"deg");s.style.background=i%2?"var(--red)":"var(--blue)";btn.appendChild(s);setTimeout(function(n){n.remove()},650,s)}})}
+function setFilter(f){if(S.filter===f){window.scrollTo({top:0,behavior:"smooth"});return}
+  S.filter=f;LS.set("aisle.filter",f);S.shown=40;S.sel=-1;S.anim=true;render();window.scrollTo(0,0);if(f==="laws")loadLaws()}
+function copyText(txt){var done=function(){toast("Copied "+txt)};
+  try{navigator.clipboard.writeText(txt).then(done,function(){toast(txt)})}catch(e){toast(txt)}}
+
+/* ---------- Events ---------- */
+var swiped=false;
+document.addEventListener("click",function(e){
+  var t=e.target,el;
+  if(swiped){swiped=false;return}
+  if((el=t.closest("[data-star]"))){e.stopPropagation();toggleWatch(el.dataset.star);return}
+  if((el=t.closest("[data-f]"))){setFilter(el.dataset.f);return}
+  if((el=t.closest("[data-more]"))){el.textContent="Loading";loadPage(false);return}
+  if((el=t.closest("[data-jump]"))){var p=el.dataset.jump.split("-");el.textContent="Opening";openBill(bid(CONGRESS,p[0],p[1]));return}
+  if(t.closest("#close")||t.id==="scrim"){closeBill();return}
+  if(t.closest("#prev")){step(-1);return}
+  if(t.closest("#next")){step(1);return}
+  if((el=t.closest("#copy"))){copyText(el.dataset.c);return}
+  if(t.closest("#sumx")){var s=$("#sum");s.classList.toggle("clamp");t.closest("#sumx").textContent=s.classList.contains("clamp")?"Read more":"Show less";return}
+  if(t.closest("#sync")){if(!S.key){S.showKey=true;render();var k=$("#key");if(k)k.focus();return}loadPage(true).then(refreshWatched);return}
+  if(t.closest("#keybtn")){S.showKey=!S.showKey;render();window.scrollTo({top:0,behavior:"smooth"});return}
+  if(t.closest("#forget")){S.key="";LS.set("aisle.key","");S.live=false;S.err=null;S.total=null;S.offset=0;S.lawsLoaded=false;seedSample();S.anim=true;render();toast("Key removed");return}
+  if(t.closest("#qx")){$("#q").value="";S.q="";S.shown=40;render();$("#q").focus();return}
+  if((el=t.closest(".bill"))){S.sel=S.view.findIndex(function(b){return b.id===el.dataset.id});openBill(el.dataset.id)}
+});
+document.addEventListener("submit",function(e){
+  if(e.target.id!=="keyform")return;e.preventDefault();
+  var v=$("#key").value.trim();if(!v){toast("Paste your key first");return}
+  S.key=v;LS.set("aisle.key",v);S.showKey=false;S.err=null;S.offset=0;S.booted=false;
+  loadPage(true).then(function(){if(S.live&&!S.err){toast("Connected to Congress.gov");refreshWatched()}})});
+var qT=0;
+$("#q").addEventListener("input",function(e){clearTimeout(qT);qT=setTimeout(function(){S.q=e.target.value;S.shown=40;S.sel=-1;render()},90)});
+$("#q").addEventListener("keydown",function(e){
+  if(e.key==="Enter"){var c=cite(e.target.value);if(c&&(S.live||S.bills.has(bid(CONGRESS,c.t,c.n)))){openBill(bid(CONGRESS,c.t,c.n))}else if(S.view[0]){openBill(S.view[0].id)}e.target.blur()}
+  if(e.key==="Escape"){e.target.value="";S.q="";render();e.target.blur()}});
+document.addEventListener("keydown",function(e){
+  if(e.metaKey||e.ctrlKey||e.altKey)return;
+  var typing=/INPUT|TEXTAREA/.test(document.activeElement&&document.activeElement.tagName||"");
+  if(e.key==="Escape"&&S.open){closeBill();return}
+  if(typing)return;
+  var k=e.key.toLowerCase();
+  if(k==="/"){e.preventDefault();$("#q").focus();return}
+  if(k==="j"||k==="k"){var dir=k==="j"?1:-1;if(S.open){step(dir);return}
+    S.sel=Math.max(0,Math.min(Math.min(S.view.length,S.shown)-1,S.sel+dir));
+    document.querySelectorAll("#list .bill").forEach(function(el,i){el.classList.toggle("sel",i===S.sel);if(i===S.sel)el.scrollIntoView({block:"center",behavior:"smooth"})});return}
+  if(k==="enter"){var a=document.activeElement;if(a&&/BUTTON|A/.test(a.tagName))return;if(a&&a.classList&&a.classList.contains("bill")){openBill(a.dataset.id);return}if(!S.open&&S.view[S.sel])openBill(S.view[S.sel].id);return}
+  if(k==="s"){var id=S.open||(S.view[S.sel]&&S.view[S.sel].id);if(id)toggleWatch(id);return}
+  if(/^[1-5]$/.test(k)&&!S.open){setFilter(["all","house","senate","laws","watching"][+k-1])}});
+
+/* swipe a card right to watch */
+(function(){var el=null,x0=0,y0=0,dx=0,on=false;
+  var list=$("#list");
+  list.addEventListener("pointerdown",function(e){if(e.pointerType!=="touch")return;el=e.target.closest(".bill");if(!el||e.target.closest(".star")){el=null;return}x0=e.clientX;y0=e.clientY;dx=0;on=false});
+  list.addEventListener("pointermove",function(e){if(!el)return;dx=e.clientX-x0;var dy=e.clientY-y0;
+    if(!on){if(Math.abs(dy)>10&&Math.abs(dy)>Math.abs(dx)){el=null;return}if(dx>14&&dx>Math.abs(dy)*1.5){on=true;el.classList.add("drag")}else return}
+    var d=Math.max(0,Math.min(120,dx));el.style.transform="translateX("+d+"px)";var h=el.querySelector(".swipehint");if(h){h.style.opacity=Math.min(1,d/80);h.style.transform="translate("+(-d)+"px,-50%)"}});
+  function end(){if(!el)return;var e2=el,go=on&&dx>80;el=null;if(!on)return;swiped=true;setTimeout(function(){swiped=false},350);
+    e2.classList.remove("drag");e2.style.transform="";var h=e2.querySelector(".swipehint");if(h){h.style.opacity=0;h.style.transform=""}
+    if(go)setTimeout(function(){toggleWatch(e2.dataset.id)},160)}
+  list.addEventListener("pointerup",end);list.addEventListener("pointercancel",end)})();
+/* drag the sheet down to close */
+(function(){var y0=null,dy=0,sh=$("#sheet");
+  function down(e){if(e.target.closest("button"))return;y0=e.clientY;dy=0;sh.classList.add("drag")}
+  function move(e){if(y0==null)return;dy=Math.max(0,e.clientY-y0);sh.style.transform="translateY("+dy+"px)"}
+  function up(){if(y0==null)return;y0=null;sh.classList.remove("drag");if(dy>90)closeBill();else sh.style.transform=""}
+  [$("#grab"),$("#shead")].forEach(function(n){n.addEventListener("pointerdown",down)});
+  window.addEventListener("pointermove",move);window.addEventListener("pointerup",up);window.addEventListener("pointercancel",up)})();
+
+if("IntersectionObserver" in window){new IntersectionObserver(function(es){if(!es[0].isIntersecting)return;
+  if(S.shown<S.view.length){S.shown+=40;render()}
+  else if(S.live&&S.more&&!S.loading&&!S.q&&S.filter==="all")loadPage(false)},{rootMargin:"600px"}).observe($("#more"))}
+window.addEventListener("hashchange",route);
+setInterval(function(){if(S.live&&!document.hidden&&!S.loading){api("bill/"+CONGRESS,"limit=250&offset=0&sort=updateDate+desc").then(function(d){var m=0;(d.bills||[]).forEach(function(x){if(merge(norm(x)))m++});
+  S.sync=new Date();if(m){toast(m+" bill"+(m>1?"s":"")+" moved");if(!S.open)render()}else meta();S.moved={}}).catch(function(){});refreshWatched()}},5*60*1000);
+
+/* ---------- Boot ---------- */
+seedSample();render();route();
+if(S.key)loadPage(true).then(function(){refreshWatched();if(S.filter==="laws")loadLaws();route()});
+})();
+</script>
+</body>
+</html>
